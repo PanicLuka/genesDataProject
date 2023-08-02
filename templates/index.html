@@ -1,0 +1,192 @@
+<html>
+  <head>
+    <title>My Flask Page</title>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+      function calculateCount() {
+        $.get('/numbers', function (data) {
+          $('#result').text('Count: ' + data.count)
+        })
+      }
+    </script>
+    <script>
+      function calculateMeanAndDev() {
+        $.get('/get_stats', function (data) {
+          $('#result_dev').text(data.std_dev)
+          $('#result_mean').text(data.mean)
+        })
+      }
+    </script>
+    <script>
+      function calculateDomain() {
+        $.get('/get_highest_domain', function (data) {
+          $('#domain_value').text(data.value)
+        })
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Questions A</h1>
+    <div>
+      <div>
+        <p>
+          A1. How many unique gene/copy-number values are in the file?
+        </p>
+        <button onclick="calculateCount()">Calculate</button>
+        <div id="result"></div>
+      </div>
+      <div>
+        <p>
+          A2. Compute the mean and standard deviation of copy number for all
+          unique human gene products/proteins
+        </p>
+        <button onclick="calculateMeanAndDev()">Calculate</button>
+        <table border="1">
+          <tr>
+            <th>Mean</th>
+            <th>Standard Deviation</th>
+          </tr>
+          <tr>
+            <td id="result_mean"></td>
+            <td id="result_dev"></td>
+          </tr>
+        </table>
+
+        <h1>Questions B</h1>
+        <div>
+          <p>
+            B1. What is the domain with the highest average abundance (i.e.
+            across all copies of the domain in all gene products/proteins)?
+          </p>
+          <button onclick="calculateDomain()">Calculate</button>
+          <div id="domain_value"></div>
+        </div>
+
+        <div>
+          <p>
+            B2. Compute the mean and standard deviation of domain average
+            abundance for each protein (they have the same labels as genes)
+            domain by combining these two files also, compute the percentile
+            rank values as above (Two tables)
+          </p>
+
+          <button id="showProteinStatsButton" onclick="showProteinStats()">
+            Show Protein Stats
+          </button>
+          <table id="proteinStatsTable"></table>
+        </div>
+      </div>
+    </div>
+    <!-- <script>
+      document
+        .getElementById('showRanksButton')
+        .addEventListener('click', function () {
+          // Send AJAX request to Flask route to get the JSON data
+          var xhr = new XMLHttpRequest()
+          xhr.open('GET', '/get_percentile_rank_for_each_domain')
+          xhr.onload = function () {
+            if (xhr.status === 200) {
+              var data = JSON.parse(xhr.responseText)
+              displayTable(data)
+            }
+          }
+          xhr.send()
+        })
+
+      function displayTable(data) {
+        var table = document.getElementById('ranksTable')
+
+        // Create table header row
+        var headers = ['Gn', 'Domain', 'Mean-copy-number', 'Percentile Rank']
+        var headerRow = document.createElement('tr')
+        headers.forEach(function (header) {
+          var th = document.createElement('th')
+          th.textContent = header
+          headerRow.appendChild(th)
+        })
+        table.appendChild(headerRow)
+
+        // Populate table rows with data
+        if (data && data.percentile_data) {
+          data.percentile_data.forEach(function (rowData) {
+            var row = document.createElement('tr')
+
+            var geneProductCell = document.createElement('td')
+            geneProductCell.textContent = rowData.Gn
+            row.appendChild(geneProductCell)
+
+            var meanCopyNumberCell = document.createElement('td')
+            meanCopyNumberCell.textContent = rowData['Mean-copy-number']
+            row.appendChild(meanCopyNumberCell)
+
+            var percentileRankCell = document.createElement('td')
+            percentileRankCell.textContent =
+              rowData['Percentile Rank'].toFixed(2) + '%'
+            row.appendChild(percentileRankCell)
+
+            table.appendChild(row)
+          })
+        } else {
+          // Display a message when no data is available
+          var emptyRow = document.createElement('tr')
+          var emptyCell = document.createElement('td')
+          emptyCell.textContent = 'No data available.'
+          emptyCell.setAttribute('colspan', headers.length)
+          emptyRow.appendChild(emptyCell)
+          table.appendChild(emptyRow)
+        }
+      }
+    </script> -->
+    <script>
+      function showProteinStats() {
+        var xhr = new XMLHttpRequest()
+        xhr.open('GET', '/get_mean_and_stdev_for_each_protein')
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            var data = JSON.parse(xhr.responseText)
+            displayProteinStatsTable(data)
+          }
+        }
+        xhr.send()
+      }
+
+      function displayProteinStatsTable(data) {
+        var table = document.getElementById('proteinStatsTable')
+
+        table.innerHTML = ''
+
+        var headers = ['Protein Domain', 'Mean', 'Standard Deviation']
+        var headerRow = document.createElement('tr')
+        headers.forEach(function (header) {
+          var th = document.createElement('th')
+          th.textContent = header
+          headerRow.appendChild(th)
+        })
+        table.appendChild(headerRow)
+
+        for (var proteinDomain in data) {
+          var row = document.createElement('tr')
+
+          var domainCell = document.createElement('td')
+          domainCell.textContent = proteinDomain
+          row.appendChild(domainCell)
+
+          var meanCell = document.createElement('td')
+          meanCell.textContent = data[proteinDomain].mean.toFixed(2)
+          row.appendChild(meanCell)
+
+          var stdDevCell = document.createElement('td')
+          stdDevCell.textContent = data[proteinDomain].std.toFixed(2)
+          row.appendChild(stdDevCell)
+
+          table.appendChild(row)
+        }
+      }
+    </script>
+  </body>
+</html>
