@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import json
 import math
-
+from collections import Counter
 
 
 app = Flask(__name__)
@@ -25,24 +25,13 @@ df2.rename(columns={'#Gn': 'Gn'}, inplace=True)
 df1['Mean-copy-number'] = pd.to_numeric(df1['Mean-copy-number'], errors='coerce')
 
 
-
-
 merged_df = pd.merge(df1, df2, on='Gn')
 
-domain_avg_abundance = merged_df.groupby('Domain')['Mean-copy-number'].mean()
+domain_avg_abundance = merged_df.groupby('Domain')['Mean-copy-number'].mean() 
 
 highest_avg_domain = domain_avg_abundance.idxmax()
 
-highest_avg_abundance_value = domain_avg_abundance.max()
-
-
-protein_stats = merged_df.groupby('Gn')['Mean-copy-number'].agg(['mean', 'std'])
-
-merged_df['Percentile Rank'] = merged_df.groupby('Domain')['Mean-copy-number'].rank(pct=True)
-
-output_file = 'combined_data_stats.csv'
-merged_df.to_csv(output_file, index=False)
-
+highest_avg_abundance_value = domain_avg_abundance.max() 
 
 
 
@@ -70,26 +59,28 @@ def get_unique_values_with_one_occurrence(file_path, column_number):
 
     unique_values_with_one_occurrence = [value for value, count in value_occurrences.items() if count == 1]
     return unique_values_with_one_occurrence
+    
 
 
 def count_unique_values_with_one_occurrence(file_path, column_number):
-    value_count = {}
-    with open(file_path, 'r') as file:
+    value_count = {} 
+    with open(file_path, 'r') as file: 
         next(file)
         for line in file:
-            columns = re.split(r'\s+', line.strip())
+            columns = re.split(r'\s+', line.strip()) 
             if len(columns) >= column_number:
                 value = columns[column_number - 1]
-                value_count[value] = value_count.get(value, 0) + 1
+                value_count[value] = value_count.get(value, 0) + 1 
 
-    count_of_values_with_one_occurrence = sum(1 for count in value_count.values() if count == 1)
+    count_of_values_with_one_occurrence = sum(1 for count in value_count.values() if count == 1) 
     return count_of_values_with_one_occurrence
+    
 
 
 def compute_mean_and_std_deviation(values):
     if len(values) > 0:
-        mean = statistics.mean(values)
-        std_dev = statistics.stdev(values)
+        mean = statistics.mean(values) 
+        std_dev = statistics.stdev(values) 
         return mean, std_dev
     else:
         return None, None
@@ -112,44 +103,57 @@ def get_mean_and_std_deviation():
 
 @app.route('/get_highest_domain')
 def get_highest_domain():
-    return jsonify({"value": highest_avg_abundance_value})
+    return jsonify({"value": highest_avg_domain})
 
 @app.route('/get_mean_and_stdev_for_each_protein')
 def get_mean_and_stdev_for_each_protein():
-    protein_stats_dict = protein_stats.to_dict()
+    gene_data = pd.read_csv('9606_abund.txt', delimiter='\t')
 
-    if 'Protein Domain' in protein_stats.columns:
-        for protein_domain, group in protein_stats.groupby('Protein Domain'):
-            mean_value = group['Mean-copy-number'].mean()
-            std_value = group['Mean-copy-number'].std()
+    domain_data = pd.read_csv('9606_gn_dom.txt', delimiter='\t')
 
-            if isinstance(mean_value, float) and not math.isnan(mean_value):
-                mean_value = round(mean_value, 2)
-            else:
-                mean_value = None
+    domain_data.rename(columns={'#Gn': 'Gn'}, inplace=True)
 
-            if isinstance(std_value, float) and not math.isnan(std_value):
-                std_value = round(std_value, 2)
-            else:
-                std_value = None
-
-            protein_stats_dict[protein_domain] = {'mean': mean_value, 'std': std_value}
-
-    json_response = json.dumps(protein_stats_dict, default=lambda x: None if x is None else float(x))
-
-    response = app.response_class(
-        response=json_response,
-        status=200,
-        mimetype='application/json'
-    )
-
-    return response
+    gene_data['Mean-copy-number'] = pd.to_numeric(gene_data['Mean-copy-number'], errors='coerce')
 
 
-@app.route('/get_percentile_rank_for_each_domain')
+    combined_data = pd.merge(gene_data, domain_data, on='Gn')
+
+    grouped_data = combined_data.groupby(['Gn', 'Domain'])['Mean-copy-number'].mean().reset_index()
+    grouped_data['Standard-Deviation'] = combined_data.groupby(['Gn', 'Domain'])['Mean-copy-number'].std().reset_index()['Mean-copy-number']
+
+
+    grouped_data['Percentile-Rank'] = grouped_data.groupby('Domain')['Mean-copy-number'].rank(pct=True) * 100
+
+    grouped_data_dict = grouped_data.to_dict()
+
+    for index, row in grouped_data.iterrows():
+        gene = row['Gn']
+        domain = row['Domain']
+        mean_abundance = row['Mean-copy-number']
+        std_deviation = row['Standard-Deviation']
+        percentile_rank = row['Percentile-Rank']
+        
+        print(f"Gene: {gene}\tDomain: {domain}\tMean Abundance: {mean_abundance:.2f}\tStd Deviation: {std_deviation:.2f}\tPercentile Rank: {percentile_rank:.2f}%")
+
+
+
+@app.route('/get_percentile_rank_for_each_gene')
 def get_percentile_rank_for_each_domain():
-    percentile_stats_dict = merged_df[['Gn', 'Domain', 'Mean-copy-number', 'Percentile Rank']].to_dict()
-    return jsonify(percentile_stats_dict)
+    data = pd.read_csv('9606_abund.txt', delimiter='\t')
+
+    unique_data = data.drop_duplicates(subset=['Gn', 'Mean-copy-number'])
+
+    unique_data['Rank'] = unique_data['Mean-copy-number'].rank(method='average', ascending=True)
+
+    grouped = unique_data.groupby('Gn')['Rank'].max()
+    total_genes = grouped.count()
+    gene_percentiles = (grouped - 1) / (total_genes - 1) * 100
+
+    gene_dict = gene_percentiles.to_dict()
+    
+    return jsonify(gene_dict)
+
+   
 
 
 
